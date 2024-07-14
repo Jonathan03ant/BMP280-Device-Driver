@@ -89,3 +89,19 @@ ssize_t deviceWrite(struct file *filp, const chat *buffer, size_t buffcnt, loff_
 	return ret;
 }
 
+
+/* 
+*	* This function will be called when we initialize the driver
+*		* First we call alloc_chrdev_region() to allocate range of numbers four our device
+*		* Next, we call cdev_alloc() to create a chr device structure
+*			* this chrdev will have fops we defined during earlier stages
+*		* Finally we call cdev_add to associalte the cdev we created with the numbers we allocated earlier.
+*/
+
+static int driverInit(void){
+
+	/* Allocate a major number dynamically
+		*pointer to dev_t, minorno, count(no of minor no), const char device name
+	*/
+	int ret = alloc_chrdev_region(&dev_n, minor, 1, DEVICE_NAME);
+	
