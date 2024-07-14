@@ -39,10 +39,10 @@ struct my_device {
 
 struct file_operations f_ops = {
 	.owner = THIS_MODULE,
+	.open = deviceOpen,
 	.release = deviceRelease,
 	.read = deviceRead,
 	.write = deviceWrite,	
-	.open = deviceOpen,
 }
 
 /* 
@@ -98,7 +98,7 @@ ssize_t deviceWrite(struct file *filp, const chat *buffer, size_t buffcnt, loff_
 *		* Finally we call cdev_add to associalte the cdev we created with the numbers we allocated earlier.
 */
 
-static int driverInit(void){
+static int deviceInit(void){
 
 	/*
 		* Allocate a major number dynamically
@@ -138,6 +138,17 @@ static int driverInit(void){
 	
 }	
 
-	
+static void driverClose(void){
+	cdev_del(my_chrdev);
+	unregister_chrdev_region(dev_n, 1);
+	printk(KERNEL_INFO "Unloading Kernel Module");
+}
+
+
+
+
+
+module_init(driverInit);
+module_exit(driverClose);
 
 
