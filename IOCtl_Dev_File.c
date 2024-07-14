@@ -100,8 +100,44 @@ ssize_t deviceWrite(struct file *filp, const chat *buffer, size_t buffcnt, loff_
 
 static int driverInit(void){
 
-	/* Allocate a major number dynamically
-		*pointer to dev_t, minorno, count(no of minor no), const char device name
+	/*
+		* Allocate a major number dynamically
+			* Pointer to dev_t, minorno, count(no of minor no), const char device name
 	*/
 	int ret = alloc_chrdev_region(&dev_n, minor, 1, DEVICE_NAME);
+	if (ret)
+		printk(KERNEL_ALERT "Failed to allocate a Major number");
+		return ret;
+	}
+
+	major = MAJOR(dev_n);
+	minor = MINOR(dev_n);
 	
+	printk(KERNEL_INFO "DEVICs, [Major = %d, [Minor = %d]\n", DEVICE_NAME, major, minor);
+	printk(KERNEL_INFO "Use MKNODE or  MODPROB to insert the device file");
+
+
+
+	/*
+*		* Now we can create a chr device and associate it with the dev_n
+	*/
+
+	my_chrdev = cdev_alloc();
+	my_chrdev->ops = &f_ops;
+	my_chrdev->owner = THIS_MODULE; 
+
+	int ret = cdev_add(my_chrdev, dev_n, 1)		/* Add device to the kernel*/
+	if (ret) {
+		printk(KERNEL_ALERT " Unable to add cdev to the Kernel");
+		return ret;
+	}
+
+	sema_init(&virtual_dev.sem, 1);
+	
+	return 0;
+	
+}	
+
+	
+
+
