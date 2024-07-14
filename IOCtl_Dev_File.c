@@ -145,7 +145,9 @@ static void driverClose(void){
 }
 
 
-
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Jonathan");
+MODULE_DESCRIPTION(" Driver for BMC280 I2C Temp/Hum Sensor Module");
 
 
 module_init(driverInit);
