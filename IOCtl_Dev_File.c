@@ -103,7 +103,7 @@ static int __init driverInit(void) {
         * Allocate a major number dynamically
         * Pointer to dev_t, minorno, count(no of minor no), const char device name
     */
-    int ret = alloc_chrdev_region(&dev_n, minor, 1, DEVICE_NAME);
+    int ret = _
     if (ret) {
         printk(KERN_ALERT "Failed to allocate a Major number");
         return ret;
