@@ -4,8 +4,13 @@
 #include <linux/cdev.h>
 #include <linux/uaccess.h>
 #include <linux/semaphore.h>
+#include <linux/i2c.h>
+#include <linux/init.h>
+#include <linux/slab.h>
 
-#define DEVICE_NAME "utg"
+define DEVICE_NAME "utg"
+define BMP280_I2C_ADDRESS 0x76
+
 
 /* 
     * We need the following to register a device file
@@ -20,20 +25,35 @@ static int minor = 0;
 dev_t dev_n;
 
 /*
-    * struct to represent our device file
-    * this is temporary
+    * struct to represent our device specific data (clinet)
 */
 
-struct my_device {
-    char data[256];
-    struct semaphore sem;
+
+struct bmp280_data {
+               struct i2c_client *client;
+}
+
+/*
+    * Define device id structure
+    * This implements a single driver structure, and instantiate all clients from it.
+*/
+
+static const struct i2c_device_id bmp280_id[] = {
+    {"bmp280", 0},
+    {}
 };
 
-struct my_device virtual_dev; 
+//The following are function prototypes needed for our i2c_device
+
+static int bmp280_probe();
+static int bmp28_remove();
+static int bmp280_read_register();
+static int bmp280_write_to_register();
 
 /*
     *  This will be the file operations the Kernel calls
     *  when the driver is called from the user space
+    # FUNCTION PROTOTYPES
 */
 
 static int deviceOpen(struct inode *inode, struct file *instance);
@@ -42,7 +62,7 @@ static ssize_t deviceRead(struct file *filp, char *buffer, size_t buffcnt, loff_
 static ssize_t deviceWrite(struct file *filp, const char *buffer, size_t buffcnt, loff_t *off_p);
 
 struct file_operations f_ops = {
-    .owner = THIS_MODULE,
+    .owner = THIS_MODULE
     .open = deviceOpen,
     .release = deviceRelease,
     .read = deviceRead,
