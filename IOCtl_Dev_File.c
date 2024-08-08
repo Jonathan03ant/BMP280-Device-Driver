@@ -45,7 +45,7 @@ static const struct i2c_device_id bmp280_id[] = {
 
 //The following are function prototypes needed for our i2c_device
 
-static int bmp280_probe();
+static int bmp280_probe(s);
 static int bmp28_remove();
 static int bmp280_read_register();
 static int bmp280_write_to_register();
