@@ -1,12 +1,12 @@
-#include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/fs.h>
-#include <linux/cdev.h>
-#include <linux/uaccess.h>
-#include <linux/semaphore.h>
-#include <linux/i2c.h>
-#include <linux/init.h>
-#include <linux/slab.h>
+#include <linux/module.h>  // Kernel Modules
+#include <linux/kernel.h>  // Kernel Functions like PrintK
+#include <linux/fs.h>     // File system functions
+#include <linux/cdev.h>   // For Character device registration
+#include <linux/uaccess.h> // For a data transfer to/from user space
+#include <linux/semaphore.h> 
+#include <linux/i2c.h>   // I2C Communication
+#include <linux/init.h>  // Module init
+#include <linux/slab.h>  // FOr memory Allocation (Kmalloc, Kfree)
 
 define DEVICE_NAME "utg"
 define BMP280_I2C_ADDRESS 0x76
