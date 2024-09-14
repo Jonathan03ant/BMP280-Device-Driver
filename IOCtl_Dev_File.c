@@ -1,5 +1,5 @@
-#include <linux/module.h>  // Kernel Modules
-#include <linux/kernel.h>  // Kernel Functions like PrintK
+#include <linux/module.h>   // Kernel Modules, Printk
+#include <linux/kernel.h>  // Kernel Functions
 #include <linux/fs.h>     // File system functions
 #include <linux/cdev.h>   // For Character device registration
 #include <linux/uaccess.h> // For a data transfer to/from user space
@@ -11,111 +11,91 @@
 define DEVICE_NAME "utg"
 define BMP280_I2C_ADDRESS 0x76
 
-
-/* 
-    * We need the following to register a device file
-    * cdev to register our char device file
-    * a major and minor no
-    * dev_t to hold major and minor no
-*/
-
-static struct cdev *my_char_dev;
-static int major;
-static int minor = 0;
-dev_t dev_n;
-
-/*
-    * struct to represent our device specific data (clinet)
-*/
-
-
-struct bmp280_data {
-               struct i2c_client *client;
-}
-
 /*
     * Define device id structure
-    * This implements a single driver structure, and instantiate all clients from it.
+    * This tells the kernel which devices this driver supports.
+    * "These are the devices i know how to handle"
 */
-
 static const struct i2c_device_id bmp280_id[] = {
     {"bmp280", 0},
-    {}
+    {} // newer version of the driver
 };
+MODULE_DEVICE_TABLE(i2c, bmp280_id);    // Register Device Table
 
-//The following are function prototypes needed for our i2c_device
-
-static int bmp280_probe(s);
-static int bmp28_remove();
-static int bmp280_read_register();
-static int bmp280_write_to_register();
 
 /*
-    *  This will be the file operations the Kernel calls
-    *  when the driver is called from the user space
+    * Define the actual clinet structure to represent our I2c Client
+    * This should point to an i2c client structure
+*/
+struct bmp280_data {
+    struct i2c_client* client;
+}
+
+
+/*
+    * Define the driver structure to implement essential callbacks WITHIN THE KERNEL
+    * This functions are used once the driver id is found by the Master
+    * https://www.linuxtv.org/downloads/v4l-dvb-internals/device-drivers/API-struct-i2c-driver.html
+*/
+static struct i2c_driver bmp280_driver = {
+    .driver = {
+            .name = "bmp280",
+            .owner = THIS_MODULE,
+    },
+    .probe = bmp280_probe,   // This function is called when the device is found
+    .remove = bmp280_remove, // This function is called when the device is removed
+    .id_table = bmp280_id,   // "Hey driver, here are the devices i know how to handle"
+}
+
+   
+/*
+    * Define structures for Major and Minor Numbers
+    * cdev structure
+    * and the device class
+*/
+static dev_t dev_num;
+static struct cdev* bmp280_cdev;
+static struct class *bmp280_class;
+
+// Defining File Ops of bmp280
+/*
+    * This function is called when we want to open the device file
+*/
+static int bmp280_open(struct inode* inode, struct file* file) {
+}
+
+
+/*
+    * This function is called when we want to release the device file
+*/
+static int bmp280_release(struct inode* inode, struct file* file) {
+}
+
+
+/*
+    * This function is called when we want to read from the device file
+*/
+static ssize_t bmp280_read(stuct file* file, const char __user* buf, size_t count, loff_t* offset) {
+}
+
+/* 
+    * Defining the FOPS stucture for the driver
+*/
+
+/*
+    * This will be the file operations the Kernel calls
+    * When the driver is called from the user space
     # FUNCTION PROTOTYPES
 */
-
-static int deviceOpen(struct inode *inode, struct file *instance);
-static int deviceRelease(struct inode *inode, struct file *instance);
-static ssize_t deviceRead(struct file *filp, char *buffer, size_t buffcnt, loff_t *off_p);
-static ssize_t deviceWrite(struct file *filp, const char *buffer, size_t buffcnt, loff_t *off_p);
-
 struct file_operations f_ops = {
     .owner = THIS_MODULE
-    .open = deviceOpen,
-    .release = deviceRelease,
-    .read = deviceRead,
-    .write = deviceWrite,
+    .open = bmp280_open,
+    .release = bmp280_release,
+    .read = bmp280_read,
+    .write = bmp280_write,
 };
 
-/* 
-   * Now we can define our operations we defined above
-  
-*/
 
-int deviceOpen(struct inode *inode, struct file *instance) {
-    if (down_interruptible(&virtual_dev.sem) != 0) {
-        printk(KERN_ALERT "Device running already, CANNOT be locked");
-        return -1;
-    }
-
-    printk(KERN_INFO "Device Open() is called");
-    return 0;
-}
-
-int deviceRelease(struct inode *inode, struct file *instance) {
-    up(&virtual_dev.sem);
-    printk(KERN_INFO "Device close() called, closing device");
-    return 0;
-}
-
-/*
-    * KERNEL---->USER
-*/
-
-ssize_t deviceRead(struct file *filp, char *buffer, size_t buffcnt, loff_t *off_p) {
-    printk(KERN_INFO "Device read() is called, reading from driver");
-    int ret = copy_to_user(buffer, virtual_dev.data, buffcnt);  // (to, from, n)
-    return ret;
-}
-
-/*
-    * USER---->KERNEL
-*/
-ssize_t deviceWrite(struct file *filp, const char *buffer, size_t buffcnt, loff_t *off_p) {
-    printk(KERN_INFO "Device write() is called, writing to driver.");
-    int ret = copy_from_user(virtual_dev.data, buffer, buffcnt); // (to, from, n)
-    return ret;
-}
-
-/* 
-    * This function will be called when we initialize the driver
-    * First we call alloc_chrdev_region() to allocate range of numbers for our device
-    * Next, we call cdev_alloc() to create a chr device structure
-    * this chrdev will have fops we defined during earlier stages
-    * Finally we call cdev_add to associate the cdev we created with the numbers we allocated earlier.
-*/
 
 static int __init driverInit(void) {
 
