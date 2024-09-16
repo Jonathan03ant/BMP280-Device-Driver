@@ -55,8 +55,9 @@ struct bmp280_data {
         s16 dig_T2; //signed
         s16 dig_T3; //signed 
     } calib;
-    }
-}
+        
+};
+
 
 
 /*
@@ -128,7 +129,7 @@ static int bmp_probe(struct i2c_client* client, const struct i2c_device_id* id) 
 
     return 0;
 
-}
+};
 
 
 /*
@@ -144,7 +145,7 @@ static struct i2c_driver bmp280_driver = {
     .probe = bmp280_probe,   // This function is called when the device is found
     .remove = bmp280_remove, // This function is called when the device is removed
     .id_table = bmp280_id,   // "Hey driver, here are the devices i know how to handle"
-}
+};
 
    
 /*
@@ -161,21 +162,21 @@ static struct class *bmp280_class;
     * This function is called when we want to open the device file
 */
 static int bmp280_open(struct inode* inode, struct file* file) {
-}
+};
 
 
 /*
     * This function is called when we want to release the device file
 */
 static int bmp280_release(struct inode* inode, struct file* file) {
-}
+};
 
 
 /*
     * This function is called when we want to read from the device file
 */
 static ssize_t bmp280_read(stuct file* file, const char __user* buf, size_t count, loff_t* offset) {
-}
+};
 
 /* 
     * Defining the FOPS stucture for the driver
@@ -202,7 +203,7 @@ struct file_operations f_ops = {
 */
 static int bmp_remove(struct i2c_client* client){
 
-}
+};
 
 
 
@@ -241,13 +242,13 @@ static int __init driverInit(void) {
     sema_init(&virtual_dev.sem, 1);
 
     return 0;
-}    
+};    
 
 static void __exit driverExit(void) {
     cdev_del(my_char_dev);
     unregister_chrdev_region(dev_n, 1);
     printk(KERN_INFO "Unloading Kernel Module");
-}
+};
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Jonathan");
