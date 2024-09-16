@@ -127,6 +127,18 @@ static int bmp280_probe(struct i2c_client* client, const struct i2c_device_id* i
 };
 
 
+/*
+    * Implement the remove function
+    * This function is called by the kernel when the device is removed
+*/
+static int bmp280_remove(struct i2c_client* client){
+    stuct bmp280_data* data = i2c_get_clientdata(client); // we will use this to get the data structure later to remove data
+    //(devm_kzalloc) is automatically freed,
+    printk(KERN_INFO "Removing BMP280 device\n");
+    return 0;
+}
+
+
 
 /*
     * Define the driver structure to implement essential callbacks WITHIN THE KERNEL
@@ -203,7 +215,7 @@ static int bmp_remove(struct i2c_client* client){
 
 
 
-static int __init driverInit(void) {
+static int __init bmp280_init(void) {
 
     /*
         * Allocate a major number dynamically
@@ -240,7 +252,7 @@ static int __init driverInit(void) {
     return 0;
 };    
 
-static void __exit driverExit(void) {
+static void __exit bmp280_exit(void) {
     cdev_del(my_char_dev);
     unregister_chrdev_region(dev_n, 1);
     printk(KERN_INFO "Unloading Kernel Module");
