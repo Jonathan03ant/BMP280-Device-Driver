@@ -42,13 +42,20 @@ Kernel Perspective:
 MODULE_DEVICE_TABLE(i2c, bmp280_id);    
 
 /*
-    * Define the actual clinet structure to represent our I2c Client
+    * Define the actual clinet Data structure to represent our I2c Client
     * This should point to an i2c client structure
     * Holds the client data, and is used to communicate with the device
     * This is the structure that is passed to the driver's probe function
 */
 struct bmp280_data {
     struct i2c_client* client;
+    // Calibration data
+    struct {
+        u16 dig_T1; //unsigned
+        s16 dig_T2; //signed
+        s16 dig_T3; //signed 
+    } calib;
+    }
 }
 
 
@@ -96,9 +103,10 @@ static int bmp_probe(struct i2c_client* client, const struct i2c_device_id* id) 
         * Register to read: 0x88 to 0xA1
         * Store the values in our data (Check for errros)
     */
-    data->calib.dig_T1 = i2c_smbus_read_word_data(client, 0x88);
-    data->calib.dig_T2 = i2c_smbus_read_word_data(client, 0x8A);
-    data->calib.dig_T3 = i2c_smbus_read_word_data(client, 0x8C);
+    data->calib.dig_T1 = i2c_smbus_read_word_data(client, 0x88);  // Read 16 bits from register 0x88 and 0x89
+    data->calib.dig_T2 = i2c_smbus_read_word_data(client, 0x8A);  // Read 16 bits from register 0x8A and 0x8B
+    data->calib.dig_T3 = i2c_smbus_read_word_data(client, 0x8C);  // Read 16 bits from register 0x8C and 0x8D
+
 
     if (data->calib.dig_T1 < 0 || data->calib.dig_T2 < 0 || data->calib.dig_T3 < 0) {
         printk(KERN_ALERT "Failed to read calibration data\n");
