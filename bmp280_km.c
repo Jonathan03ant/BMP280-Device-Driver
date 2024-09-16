@@ -53,8 +53,7 @@ struct bmp280_data {
 
 
 /*
-    * Implement the probe function
-
+    * Impelement the probe function
     * This function is called by the kernel when it detects a device that matches the id table
     *  
 */
@@ -63,22 +62,63 @@ static int bmp_probe(struct i2c_client* client, const struct i2c_device_id* id) 
     u8 chip_id;
     struct bmp280_data* data;
 
-    /*
+    /* #1
         * Verify BMP280 by reading the chip id at register 0xD0
         * BMP has a chip id of 0x58, check if the chip id is 0x58
     */
-   ret = I2C_FUNC_SMBUS_READ_BYTE_DATA(client, 0xD0);
-   if (ret < 0) {
-       printk(KERN_ALERT "Failed to read chip id\n");
-       return ret;
-   }
-   chip_id = ret;
+    ret = I2C_FUNC_SMBUS_READ_BYTE_DATA(client, 0xD0);
+    if (ret < 0) {
+        printk(KERN_ALERT "Failed to read chip id\n");
+        return ret;
+    }
+    chip_id = ret;
 
-   if (chip_id != 0x58) {
-       printk(KERN_ALERT "Invalid chip id: 0x%x\n", chip_id);
-       return -ENODEV;
-   }
+    if (chip_id != 0x58) {
+        printk(KERN_ALERT "Invalid chip id: 0x%x\n", chip_id);
+        return -ENODEV;
+    }
+    printk(KERN_INFO "Detected BMP280 with chip id: 0x%x\n", chip_id);
+ 
+    /* #2  
+        * Allocate memory for the device specific structure
+        * Associate the data->clinet with the client(ret)
+    */
+    data = kzalloc(sizeof(struct bmp280_data), GFP_KERNEL);
+    if (!data) {
+        printk(KERN_ALERT "Failed to allocate memory for device data\n");
+        return -ENOMEM;
+    }
+    data->client = client;
+    i2c_set_clientdata(client, data);
 
+    /* #3
+        * Retrive Calibration data from the BMP280
+        * Register to read: 0x88 to 0xA1
+        * Store the values in our data (Check for errros)
+    */
+    data->calib.dig_T1 = i2c_smbus_read_word_data(client, 0x88);
+    data->calib.dig_T2 = i2c_smbus_read_word_data(client, 0x8A);
+    data->calib.dig_T3 = i2c_smbus_read_word_data(client, 0x8C);
+
+    if (data->calib.dig_T1 < 0 || data->calib.dig_T2 < 0 || data->calib.dig_T3 < 0) {
+        printk(KERN_ALERT "Failed to read calibration data\n");
+        return -EIO;
+    }
+    printk(KERN_INFO "BMP280: Calibration retrieved\n");
+
+    /* #4
+        * Configuring the sensor 
+        * Registers to write to:0xF4 (Normal Mode, 16x oversampling)
+        * Values to write: 0x27
+    */
+    ret = i2c_smbus_write_byte_data(client, 0xF4, 0x27);
+    if (ret < 0) {
+        printk(KERN_ALERT "Failed to configure sensor\n");
+        return ret;
+    }
+    printk(KERN_INFO "BMP280: Sensor configured Successfully\n");
+
+    return 0;
 
 }
 
