@@ -3,7 +3,6 @@
 #include <linux/fs.h>     // File system functions
 #include <linux/cdev.h>   // For Character device registration
 #include <linux/uaccess.h> // For a data transfer to/from user space
-#include <linux/semaphore.h> 
 #include <linux/i2c.h>   // I2C Communication
 #include <linux/init.h>  // Module init
 #include <linux/slab.h>  // FOr memory Allocation (Kmalloc, Kfree)
@@ -14,14 +13,33 @@ define BMP280_I2C_ADDRESS 0x76
 /*
     * Define device id structure
     * This tells the kernel which devices this driver supports.
-    * "These are the devices i know how to handle"
+    * This driver supports an i2c device name called "bmp280"
+    * "I'm the driver
+        These are the devices i know how to handle,     
+        add me to your list right?
+        and if you find me, Please call My Probe function
+        Heres my Contact Info"
 */
 static const struct i2c_device_id bmp280_id[] = {
     {"bmp280", 0},
     {} // newer version of the driver
 };
-MODULE_DEVICE_TABLE(i2c, bmp280_id);    // Register Device Table
 
+
+/*
+    * Might Kernel adding the table to the list of devices it knows how to handle
+    * "I got you bro, I'll call you when i find a device that matches your id on the Bus"
+    * "I'll add you to the list of drivers i know how to handle"
+Kernel Perspective:
+    I2C Bus 1:
+    - No clients detected
+
+    I2C Bus 1:
+    - Detected I2C device at address 0x76
+
+    - Checks all registered i2s drivers to see if any of them claim to support the device at address 0x76.
+*/
+MODULE_DEVICE_TABLE(i2c, bmp280_id);    
 
 /*
     * Define the actual clinet structure to represent our I2c Client
@@ -29,6 +47,16 @@ MODULE_DEVICE_TABLE(i2c, bmp280_id);    // Register Device Table
 */
 struct bmp280_data {
     struct i2c_client* client;
+}
+
+
+/*
+    * Implement the probe function
+    * This function is called by the kernel when it detects a device that matches the id table
+    *  
+*/
+static int bmp_probe(struct i2c_client* client, const struct i2c_device_id* id) {
+
 }
 
 
@@ -94,6 +122,16 @@ struct file_operations f_ops = {
     .read = bmp280_read,
     .write = bmp280_write,
 };
+
+
+
+
+/*
+
+*/
+static int bmp_remove(struct i2c_client* client){
+
+}
 
 
 
