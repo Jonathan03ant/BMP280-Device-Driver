@@ -84,10 +84,11 @@ static int bmp280_probe(struct i2c_client* client, const struct i2c_device_id* i
     printk(KERN_INFO "Detected BMP280 with chip ID: 0x%x\n", chip_id);
 
     /* #2  
+        * https://www.linuxtv.org/downloads/v4l-dvb-internals/device-drivers/API-struct-i2c-client.html
         * Allocate memory for the device-specific structure
         * Associate the data->client with the client
     */
-    data = devm_kzalloc(&client->dev, sizeof(struct bmp280_data), GFP_KERNEL);
+    data = devm_kzalloc(&client->dev, sizeof(struct bmp280_data), GFP_KERNEL); //Driver model device node for the slave.
     if (!data) {
         printk(KERN_ALERT "Failed to allocate memory for device data\n");
         return -ENOMEM;
@@ -204,17 +205,10 @@ struct file_operations f_ops = {
 };
 
 
-
-
 /*
-
+    * Define the init and exit functions for the driver
+    * These functions are called when the driver is loaded and unloaded
 */
-static int bmp_remove(struct i2c_client* client){
-
-};
-
-
-
 static int __init bmp280_init(void) {
 
     /*
