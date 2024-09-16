@@ -7,7 +7,7 @@
 #include <linux/init.h>  // Module init
 #include <linux/slab.h>  // FOr memory Allocation (Kmalloc, Kfree)
 
-define DEVICE_NAME "utg"
+define DEVICE_NAME "bmp280"
 define BMP280_I2C_ADDRESS 0x76
 
 /*
@@ -44,6 +44,8 @@ MODULE_DEVICE_TABLE(i2c, bmp280_id);
 /*
     * Define the actual clinet structure to represent our I2c Client
     * This should point to an i2c client structure
+    * Holds the client data, and is used to communicate with the device
+    * This is the structure that is passed to the driver's probe function
 */
 struct bmp280_data {
     struct i2c_client* client;
@@ -52,10 +54,31 @@ struct bmp280_data {
 
 /*
     * Implement the probe function
+
     * This function is called by the kernel when it detects a device that matches the id table
     *  
 */
 static int bmp_probe(struct i2c_client* client, const struct i2c_device_id* id) {
+    int ret;
+    u8 chip_id;
+    struct bmp280_data* data;
+
+    /*
+        * Verify BMP280 by reading the chip id at register 0xD0
+        * BMP has a chip id of 0x58, check if the chip id is 0x58
+    */
+   ret = I2C_FUNC_SMBUS_READ_BYTE_DATA(client, 0xD0);
+   if (ret < 0) {
+       printk(KERN_ALERT "Failed to read chip id\n");
+       return ret;
+   }
+   chip_id = ret;
+
+   if (chip_id != 0x58) {
+       printk(KERN_ALERT "Invalid chip id: 0x%x\n", chip_id);
+       return -ENODEV;
+   }
+
 
 }
 
@@ -141,17 +164,17 @@ static int __init driverInit(void) {
         * Allocate a major number dynamically
         * Pointer to dev_t, minorno, count(no of minor no), const char device name
     */
-    int ret = _
+    int ret = alloc_chrdev_region(&dev_num, 0, 1, DEVICE_NAME);
     if (ret) {
         printk(KERN_ALERT "Failed to allocate a Major number");
         return ret;
     }
 
-    major = MAJOR(dev_n);
-    minor = MINOR(dev_n);
+    major = MAJOR(dev_num);
+    minor = MINOR(dev_num);
 
-    printk(KERN_INFO "DEVICE --> %s, [Major = %d], [Minor = %d]\n", DEVICE_NAME, major, minor);
-    printk(KERN_INFO "Use mknod or modprobe to insert the device file");
+    printk(KERN_INFO "SLAVE --> %s, [Major = %d], [Minor = %d]\n", DEVICE_NAME, major, minor);
+    printk(KERN_INFO "Use mknod or modprobe to insert the driver\n");
 
     /*
     * Now we can create a chr device and associate it with the dev_n
