@@ -48,7 +48,7 @@ MODULE_DEVICE_TABLE(i2c, bmp280_id);
     * This is the structure that is passed to the driver's probe function
 */
 struct bmp280_data {
-    struct i2c_client* client;
+    struct i2c_client* client; //https://www.linuxtv.org/downloads/v4l-dvb-internals/device-drivers/API-struct-i2c-client.html
     // Calibration data
     struct {
         u16 dig_T1;  // unsigned
@@ -59,7 +59,8 @@ struct bmp280_data {
 
 /*
     * Implement the probe function
-    * This function is called by the kernel when it detects a device that matches the id table
+    * the probe() function is called when the kernel finds a BMP280 sensor on the I2C bus. 
+    * Passes the I2C client ==> specific BMP280 sensor on the bus.
 */
 static int bmp280_probe(struct i2c_client* client, const struct i2c_device_id* id) {
     int ret;
@@ -191,6 +192,7 @@ static ssize_t bmp280_read(stuct file* file, const char __user* buf, size_t coun
     * Defining the FOPS stucture for the driver
 */
 
+
 /*
     * This will be the file operations the Kernel calls
     * When the driver is called from the user space
@@ -210,46 +212,68 @@ struct file_operations f_ops = {
     * These functions are called when the driver is loaded and unloaded
 */
 static int __init bmp280_init(void) {
+    /*
+        * Register the I2C driver with the Kernel
+    */
+    int ret = i2c_add_driver(&bmp280_driver)
+    if (ret) {
+        printk(KERN_ALERT "Failed to register I2C driver\n");
+        return ret;
+    }
+    printk(KERN_INFO "BMP280 driver registered successfully\n");
 
     /*
         * Allocate a major number dynamically
-        * Pointer to dev_t, minorno, count(no of minor no), const char device name
     */
     int ret = alloc_chrdev_region(&dev_num, 0, 1, DEVICE_NAME);
     if (ret) {
         printk(KERN_ALERT "Failed to allocate a Major number");
+        i2c_del_driver(&bmp280_driver);
         return ret;
     }
 
     major = MAJOR(dev_num);
-    minor = MINOR(dev_num);
-
-    printk(KERN_INFO "SLAVE --> %s, [Major = %d], [Minor = %d]\n", DEVICE_NAME, major, minor);
-    printk(KERN_INFO "Use mknod or modprobe to insert the driver\n");
+    printk(KERN_INFO "Allocated major number: %d\n", major);
 
     /*
-    * Now we can create a chr device and associate it with the dev_n
+        * Create and add the character device
+        * Associate file operations (f_ops)
+        * Add the device to the system
     */
-
     my_char_dev = cdev_alloc();
-    my_char_dev->ops = &f_ops;
-    my_char_dev->owner = THIS_MODULE; 
+    if (!my_char_dev) {
+        unregister_chrdev_region(dev_num, 1);
+        i2c_del_driver(&bmp280_driver);  
+        return -ENOMEM;
+    }
 
-    ret = cdev_add(my_char_dev, dev_n, 1); /* Add device to the kernel */
+    cdev_init(my_char_dev, &f_ops);  
+    my_char_dev->owner = THIS_MODULE;
+    ret = cdev_add(my_char_dev, dev_num, 1);  
     if (ret) {
-        printk(KERN_ALERT "Unable to add cdev to the Kernel");
+        printk(KERN_ALERT "Failed to add cdev to the kernel\n");
+        cdev_del(my_char_dev);
+        unregister_chrdev_region(dev_num, 1);
+        i2c_del_driver(&bmp280_driver);  
         return ret;
     }
 
-    sema_init(&virtual_dev.sem, 1);
-
-    return 0;
+    printk(KERN_INFO "Character device created successfully\n");
+    return 0;  // Success
 };    
 
+
+/*
+    * Remove the Chr Device
+    * Unregister the driver
+*/
 static void __exit bmp280_exit(void) {
     cdev_del(my_char_dev);
     unregister_chrdev_region(dev_n, 1);
-    printk(KERN_INFO "Unloading Kernel Module");
+    printk(KERN_INFO "Character device unregistered\n");
+
+    i2c_del_driver(&bmp280_driver);
+    printk(KERN_INFO "BMP280 driver unregistered\n");
 };
 
 MODULE_LICENSE("GPL");
