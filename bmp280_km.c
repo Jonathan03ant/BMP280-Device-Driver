@@ -7,8 +7,8 @@
 #include <linux/init.h>  // Module init
 #include <linux/slab.h>  // FOr memory Allocation (Kmalloc, Kfree)
 
-define DEVICE_NAME "bmp280"
-define BMP280_I2C_ADDRESS 0x76
+#define DEVICE_NAME "bmp280"
+#define BMP280_I2C_ADDRESS 0x76
 
 /*
     * Define device id structure
@@ -30,14 +30,6 @@ static const struct i2c_device_id bmp280_id[] = {
     * Might Kernel adding the table to the list of devices it knows how to handle
     * "I got you bro, I'll call you when i find a device that matches your id on the Bus"
     * "I'll add you to the list of drivers i know how to handle"
-Kernel Perspective:
-    I2C Bus 1:
-    - No clients detected
-
-    I2C Bus 1:
-    - Detected I2C device at address 0x76
-
-    - Checks all registered i2s drivers to see if any of them claim to support the device at address 0x76.
 */
 MODULE_DEVICE_TABLE(i2c, bmp280_id);    
 
@@ -134,7 +126,7 @@ static int bmp280_probe(struct i2c_client* client, const struct i2c_device_id* i
     * This function is called by the kernel when the device is removed
 */
 static int bmp280_remove(struct i2c_client* client){
-    stuct bmp280_data* data = i2c_get_clientdata(client); // we will use this to get the data structure later to remove data
+    struct bmp280_data* data = i2c_get_clientdata(client); // we will use this to get the data structure later to remove data
     //(devm_kzalloc) is automatically freed,
     printk(KERN_INFO "Removing BMP280 device\n");
     return 0;
@@ -183,9 +175,78 @@ static int bmp280_release(struct inode* inode, struct file* file) {
 
 
 /*
-    * This function is called when we want to read from the device file
+    * This function is called when we want to read Temp from the device file
+    * we will be using client that is passed to the driver's probe function
+        * To communicate with the BMP280 sensor
 */
-static ssize_t bmp280_read(stuct file* file, const char __user* buf, size_t count, loff_t* offset) {
+
+static int bmp280_compensate_temp(struct bmp280_data *data, s32 raw_temp) {
+    s32 var1, var2, T;
+
+    var1 = ((((raw_temp >> 3) - ((s32)data->calib.dig_T1 << 1))) * ((s32)data->calib.dig_T2)) >> 11;
+    var2 = (((((raw_temp >> 4) - ((s32)data->calib.dig_T1)) * ((raw_temp >> 4) - ((s32)data->calib.dig_T1))) >> 12) * ((s32)data->calib.dig_T3)) >> 14;
+    
+    T = var1 + var2;
+    return (T * 5 + 128) >> 8;  // Return temperature in Celsius (scaled by 100)
+}
+
+static ssize_t bmp280_read(struct file* file, const char __user* buf, size_t count, loff_t* offset) {
+    /* #1
+        * Read the Raw Temp Data from the BMP280
+        * Registers to read: 0xFA to 0xFC
+        * 20 bits of data
+    */
+
+    struct bmp280_data* data = file->private_data;
+    struct i2c_client* client = data->client;
+
+    s32 raw_temp;
+    u8 temp_msb; //most significant byte
+    u8 temp_lsb; //least significant byte
+    u8 temp_xlsb; //extra least significant byte
+
+    int compensated_temp;
+    char temp_str[10]; // temp string
+    int len;
+
+    //READ TEMP DATA
+    temp_msb = i2c_smbus_read_byte_data(client, 0xFA);
+    temp_lsb = i2c_smbus_read_byte_data(client, 0xFB);
+    temp_xlsb = i2c_smbus_read_byte_data(client, 0xFC);
+
+    if (temp_msb < 0 || temp_lsb < 0 || temp_xlsb < 0) {
+        printk(KERN_ALERT "Failed to read temperature data\n");
+        return -EIO;
+    }
+
+    raw_temp = (temp_msb << 12) | (temp_lsb << 4) | (temp_xlsb >> 4);
+
+    /* #2
+        * Apply calibration data to the raw temp data
+        * Formula: T = (raw_temp / 16384.0 - data->calib.dig_T1 / 1024.0) * data->calib.dig_T2
+    */
+    compensated_temp = bmp280_compensate_temp(data, raw_temp);
+
+    /* #3
+        * Convert the temperature to a string
+        * Copy the string to the user space
+    */
+
+    len = snprintf(temp_str, sizeof(temp_str), "%d\n", compensated_temp);
+    if (*offset != 0) {
+        return 0;
+    }
+
+    if (count > len - *offset) {
+        count = len - *offset;
+    }
+
+    if (copy_to_user(buf, temp_str + *offset, count) != 0) {
+        return -EFAULT;
+    }
+
+    *offset += count;
+    return count;
 };
 
 /* 
@@ -215,7 +276,7 @@ static int __init bmp280_init(void) {
     /*
         * Register the I2C driver with the Kernel
     */
-    int ret = i2c_add_driver(&bmp280_driver)
+    int ret = i2c_add_driver(&bmp280_driver);
     if (ret) {
         printk(KERN_ALERT "Failed to register I2C driver\n");
         return ret;
@@ -225,7 +286,7 @@ static int __init bmp280_init(void) {
     /*
         * Allocate a major number dynamically
     */
-    int ret = alloc_chrdev_region(&dev_num, 0, 1, DEVICE_NAME);
+    ret = alloc_chrdev_region(&dev_num, 0, 1, DEVICE_NAME);
     if (ret) {
         printk(KERN_ALERT "Failed to allocate a Major number");
         i2c_del_driver(&bmp280_driver);
@@ -240,19 +301,19 @@ static int __init bmp280_init(void) {
         * Associate file operations (f_ops)
         * Add the device to the system
     */
-    my_char_dev = cdev_alloc();
-    if (!my_char_dev) {
+    bmp280_cdev = cdev_alloc();
+    if (!bmp280_cdev) {
         unregister_chrdev_region(dev_num, 1);
         i2c_del_driver(&bmp280_driver);  
         return -ENOMEM;
     }
 
-    cdev_init(my_char_dev, &f_ops);  
-    my_char_dev->owner = THIS_MODULE;
-    ret = cdev_add(my_char_dev, dev_num, 1);  
+    cdev_init(bmp280_cdev, &f_ops);  
+    bmp280_cdev->owner = THIS_MODULE;
+    ret = cdev_add(bmp280_cdev, dev_num, 1);  
     if (ret) {
         printk(KERN_ALERT "Failed to add cdev to the kernel\n");
-        cdev_del(my_char_dev);
+        cdev_del(bmp280_cdev);
         unregister_chrdev_region(dev_num, 1);
         i2c_del_driver(&bmp280_driver);  
         return ret;
@@ -268,8 +329,8 @@ static int __init bmp280_init(void) {
     * Unregister the driver
 */
 static void __exit bmp280_exit(void) {
-    cdev_del(my_char_dev);
-    unregister_chrdev_region(dev_n, 1);
+    cdev_del(bmp280_cdev);
+    unregister_chrdev_region(dev_num, 1);
     printk(KERN_INFO "Character device unregistered\n");
 
     i2c_del_driver(&bmp280_driver);
@@ -280,5 +341,5 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Jonathan");
 MODULE_DESCRIPTION("Driver for BMP280 I2C Temp/Hum Sensor Module");
 
-module_init(driverInit);
-module_exit(driverExit);
+module_init(bmp280_init);
+module_exit(bmp280_exit);
