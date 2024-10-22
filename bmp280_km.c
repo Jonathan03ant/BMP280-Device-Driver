@@ -10,6 +10,15 @@
 #include "bmp280_km.h"
 
 /*
+    * Define structures for Major and Minor Numbers
+    * cdev structure
+    * and the device class
+*/
+static dev_t dev_num;
+static struct cdev* bmp280_cdev;
+static struct class *bmp280_class;
+
+/*
     * Define device id structure
     * This tells the kernel which devices this driver supports.
     * This driver supports an i2c device name called "bmp280"
@@ -138,16 +147,15 @@ static int bmp280_probe(struct i2c_client* client, const struct i2c_device_id* i
 
 /*
     * Implement the remove function
-    * This function is called by the kernel when the device is removed
+    * This function is called by the kernel when the device is removed from the system
+    * Or unloaded
 */
 static int bmp280_remove(struct i2c_client* client)
 {
-    struct bmp280_data* data = i2c_get_clientdata(client); // we will use this to get the data structure later to remove data
     //(devm_kzalloc) is automatically freed,
     printk(KERN_INFO "Removing BMP280 device\n");
     return 0;
 }
-
 
 
 /*
@@ -155,7 +163,8 @@ static int bmp280_remove(struct i2c_client* client)
     * This functions are used once the driver id is found by the Master
     * https://www.linuxtv.org/downloads/v4l-dvb-internals/device-drivers/API-struct-i2c-driver.html
 */
-static struct i2c_driver bmp280_driver = {
+static struct i2c_driver bmp280_driver 
+{
     .driver = {
             .name = "bmp280",
             .owner = THIS_MODULE,
@@ -166,16 +175,6 @@ static struct i2c_driver bmp280_driver = {
 };
 
    
-/*
-    * Define structures for Major and Minor Numbers
-    * cdev structure
-    * and the device class
-*/
-static dev_t dev_num;
-static struct cdev* bmp280_cdev;
-static struct class *bmp280_class;
-
-
 /*
     * This function is called when we want to open the device file
     * From the userspace, this could be open()
@@ -285,7 +284,6 @@ struct file_operations f_ops = {
     .read = bmp280_read,
     .write = bmp280_write,
 };
-
 
 /*
     * Define the init and exit functions for the driver
