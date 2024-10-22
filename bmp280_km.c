@@ -140,7 +140,8 @@ static int bmp280_probe(struct i2c_client* client, const struct i2c_device_id* i
     * Implement the remove function
     * This function is called by the kernel when the device is removed
 */
-static int bmp280_remove(struct i2c_client* client){
+static int bmp280_remove(struct i2c_client* client)
+{
     struct bmp280_data* data = i2c_get_clientdata(client); // we will use this to get the data structure later to remove data
     //(devm_kzalloc) is automatically freed,
     printk(KERN_INFO "Removing BMP280 device\n");
@@ -174,20 +175,28 @@ static dev_t dev_num;
 static struct cdev* bmp280_cdev;
 static struct class *bmp280_class;
 
-// Defining File Ops of bmp280
+
 /*
     * This function is called when we want to open the device file
+    * From the userspace, this could be open()
+    * We ensure the device is available, and is ready (Implies Probe() worked)
+    * Retrieve the bmp280_data structure that contains the cdev.
 */
-static int bmp280_open(struct inode* inode, struct file* file) {
+static int bmp280_open(struct inode* inode, struct file* file) 
+{
+    struct bmp280_data* data = container_of(inode->i_cdev, struct bmp280_data, cdev);   //Retrive data from inode ,with cdev
+    file->private_data = data;
+    return 0;
 };
 
 
 /*
     * This function is called when we want to close the device file
-    * from user app, this could be close()
+    * from userspace, this could be close()
     * As of now, nothing complicated is needed
 */
-static int bmp280_release(struct inode* inode, struct file* file) {
+static int bmp280_release(struct inode* inode, struct file* file)
+{
     printk(KERN_INFO "BMP280 device closed\n");
     return 0;
 };
@@ -206,7 +215,7 @@ static int bmp280_release(struct inode* inode, struct file* file) {
 static ssize_t bmp280_read(struct file* file, const char __user* buf, 
                                         size_t count, loff_t* offset) 
 {
-    struct bmp280_data* data = file->private_data;  // Assigning device specific data to file*
+    struct bmp280_data* data = file->private_data;  // file->private_data already contains data, because it is opned()
     struct i2c_client* client = data->client;
     int ret;
     int32_t raw_temp;                               // Possible Type Error  Raw temperature from registers (20 bit value)

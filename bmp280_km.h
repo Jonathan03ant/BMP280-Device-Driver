@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <linux/i2c-dev.h>
 #include <linux/mutex.h>
+#include <linux/cdev.h>
 
 
 //Constants for BMP280 Registers and global variables
@@ -29,6 +30,7 @@
 */ 
 struct bmp280_data {
     struct i2c_client* client;
+    struct cdev cdev;
     struct mutex lock;
     // The following structure contains calibration data of the sensor
     struct {
