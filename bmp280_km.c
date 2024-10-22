@@ -183,9 +183,13 @@ static int bmp280_open(struct inode* inode, struct file* file) {
 
 
 /*
-    * This function is called when we want to release the device file
+    * This function is called when we want to close the device file
+    * from user app, this could be close()
+    * As of now, nothing complicated is needed
 */
 static int bmp280_release(struct inode* inode, struct file* file) {
+    printk(KERN_INFO "BMP280 device closed\n");
+    return 0;
 };
 
 
