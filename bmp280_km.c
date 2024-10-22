@@ -175,81 +175,69 @@ static int bmp280_release(struct inode* inode, struct file* file) {
 
 
 /*
-    * This function is called when we want to read Temp from the device file
-    * we will be using client that is passed to the driver's probe function
-        * To communicate with the BMP280 sensor
+    * This function is called when _USR wants to read Temp from the  driver's device file
+    * Copies temp data from kernel to user and returns the no of bytes read
+    * Simplified Flow
+    * 1. Read raw temperature (20 bit) data
+    * 2. Apply the calibration (Static) value and compensate the temperature 
+        * Calculation from the datasheet 
+    * 3. Change the final final value to string, 
+    * 4. copy value from KernelSpaceBuffer to UserSpaceBuffer
 */
-
-static int bmp280_compensate_temp(struct bmp280_data *data, s32 raw_temp) {
-    s32 var1, var2, T;
-
-    var1 = ((((raw_temp >> 3) - ((s32)data->calib.dig_T1 << 1))) * ((s32)data->calib.dig_T2)) >> 11;
-    var2 = (((((raw_temp >> 4) - ((s32)data->calib.dig_T1)) * ((raw_temp >> 4) - ((s32)data->calib.dig_T1))) >> 12) * ((s32)data->calib.dig_T3)) >> 14;
+static ssize_t bmp280_read(struct file* file, const char __user* buf, 
+                                        size_t count, loff_t* offset) 
+{
+    struct bmp280_data* data = file->private_data;  // Assigning device specific data to file*
+    struct i2c_client* client = data->client;
+    int ret;
+    int32_t raw_temp;                               // Possible Type Error  Raw temperature from registers (20 bit value)
+    int32_t actual_temp;                            // Possible Type Error s32Maybe  Actual temperature (in °C)
+    int32_t var1, var2                              // Possible Type Error s32Maybe
+    char temp_str[16];                              // Buffer to store the temp
     
-    T = var1 + var2;
-    return (T * 5 + 128) >> 8;  // Return temperature in Celsius (scaled by 100)
-}
-
-static ssize_t bmp280_read(struct file* file, const char __user* buf, size_t count, loff_t* offset) {
     /* #1
         * Read the Raw Temp Data from the BMP280
         * Registers to read: 0xFA to 0xFC
         * 20 bits of data
     */
+    raw_temp = (i2c_smbus_read_byte_data(clinet, BMP280_TEMP_MSB) << 12) |
+              (i2c_smbus_read_byte_data(data->client, BMP280_TEMP_LSB) << 4)  |
+              (i2c_smbus_read_byte_data(data->client, BMP280_TEMP_XLSB) >> 4);
 
-    struct bmp280_data* data = file->private_data;  // Assigning device specific data to file*
-    struct i2c_client* client = data->client;
-
-    s32 raw_temp;
-    u8 temp_msb; //most significant byte
-    u8 temp_lsb; //least significant byte
-    u8 temp_xlsb; //extra least significant byte
-
-    int compensated_temp;
-    char temp_str[10]; // temp string
-    int len;
-
-    /* 
-        READ TEMP DATA
-        Temp Value is 20 bit value composed of 8 bits from three registers
-    */
-    temp_msb = i2c_smbus_read_byte_data(client, 0xFA);
-    temp_lsb = i2c_smbus_read_byte_data(client, 0xFB);
-    temp_xlsb = i2c_smbus_read_byte_data(client, 0xFC);
-
-    if (temp_msb < 0 || temp_lsb < 0 || temp_xlsb < 0) {
-        printk(KERN_ALERT "Failed to read temperature data\n");
+    if (raw_temp < 0)
+    {
+        printk(KERN_ALERT "Failed to read temperature data from BMP280");
+        printk(KERN_ALERT " __read(), raw_temp => i2c_smbus_read");
         return -EIO;
     }
 
-    raw_temp = (temp_msb << 12) | (temp_lsb << 4) | (temp_xlsb >> 4);
-
     /* #2
-        * Apply calibration data to the raw temp data (compensation)
-        * Formula: T = (raw_temp / 16384.0 - data->calib.dig_T1 / 1024.0) * data->calib.dig_T2
+        * Use the calibration data(Static) from bmp280_data (Read from registers)
+        * Apply the compensation formulla
     */
-    compensated_temp = bmp280_compensate_temp(data, raw_temp);
+    int32_t dig_T1 = data->calib.dig_T1;
+    int32_t dig_T2 = data->calib.dig_T2;
+    int32_t dig_T2 = data->calib.dig_T3;
+
+    var1 = (((raw_temp / 8) - (dig_T1 * 2)) * dig_T2) / 2048;
+    var2 = (((((raw_temp / 16) - dig_T1) * (raw_temp / 16 - dig_T1)) / 4096) * dig_T3) / 16384;
+    actual_temp = (var1 + var2) / 5120;    // resulting temp in °C
+
 
     /* #3
         * Convert the temperature to a string
         * Copy the string to the user space
     */
-
-    len = snprintf(temp_str, sizeof(temp_str), "%d\n", compensated_temp);
-    if (*offset != 0) {
-        return 0;
-    }
-
-    if (count > len - *offset) {
-        count = len - *offset;
-    }
-
-    if (copy_to_user(buf, temp_str + *offset, count) != 0) {
+    snprintf(temp_str, sizeof(temp_str), "%d.%02d\n", temperature / 100, temperature % 100);
+    ret = copy_to_user(buf, temp_str, strlen(temp_str) + 1);
+    if (ret)
+    {
+        printk(KERNEL_ALERT "Failed to copy KernelBuffer(temp_str) to UserSpaceBuffer(buf)");
+        printk(KERNEL_ALERT "__read(), copy_to_usr => Kernel to User");
         return -EFAULT;
     }
 
-    *offset += count;
-    return count;
+    return strlen(temp_str) + 1;
 };
 
 /* 

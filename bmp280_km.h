@@ -2,6 +2,7 @@
 #define BMP280_KM_H
 #include <stdint.h>
 #include <linux/i2c-dev.h>
+#include <linux/mutex.h>
 
 
 //Constants for BMP280 Registers and global variables
@@ -15,10 +16,11 @@
 
 
 
-// BMP280 Data structure
+// BMP280 Device Specific Data
 struct bmp280_data {
     struct i2c_client *client;
-    struct mutexlock;
+    struct mutex lock;
+    // The following structure contains calibration data of the sensor
     struct {
         uint8_t chip_id;
         uint16_t dig_T1;
