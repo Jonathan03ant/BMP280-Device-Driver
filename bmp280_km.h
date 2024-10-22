@@ -16,9 +16,19 @@
 
 
 
-// BMP280 Device Specific Data
+/*
+    * BMP280 Device Specific Data
+    * Data's will be retrived from the sensor during the probe()
+    * And they will be stored in the computer’s memory (RAM) as this structure
+    * Hence, BMP280, Device Specific Data
+    * Once Probe() verified BMP280 Hardware, Probe() will 
+        * Allocate memory, size of bmpdata_280
+        * Assign client struct to the client passed to t (Probe(client))
+        * Read and store calibration values
+        * Set additional Settings
+*/ 
 struct bmp280_data {
-    struct i2c_client *client;
+    struct i2c_client* client;
     struct mutex lock;
     // The following structure contains calibration data of the sensor
     struct {

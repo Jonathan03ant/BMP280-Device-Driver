@@ -7,8 +7,7 @@
 #include <linux/init.h>  // Module init
 #include <linux/slab.h>  // FOr memory Allocation (Kmalloc, Kfree)
 
-#define DEVICE_NAME "bmp280"
-#define BMP280_I2C_ADDRESS 0x76
+#include "bmp280_km.h"
 
 /*
     * Define device id structure
@@ -25,7 +24,6 @@ static const struct i2c_device_id bmp280_id[] = {
     {} // newer version of the driver
 };
 
-
 /*
     * Might Kernel adding the table to the list of devices it knows how to handle
     * "I got you bro, I'll call you when i find a device that matches your id on the Bus"
@@ -34,89 +32,106 @@ static const struct i2c_device_id bmp280_id[] = {
 MODULE_DEVICE_TABLE(i2c, bmp280_id);    
 
 /*
-    * Define the actual client Data structure to represent our I2C Client
-    * This should point to an i2c client structure
-    * Holds the client data, and is used to communicate with the device
-    * This is the structure that is passed to the driver's probe function
+    * This function is called when __KERNEL finds BMP280 sensor on the I2C Bus
+    * Initializes/Prepares the sensor before any operation could take palce
+    * Simplified Overflow
+        * 1. Verify hardware presence by reading CHIP ID (Register 0xD0)
+        * 2. Allocate memory for bmp280_data which is used to store device specific data 
+        * 3. Assign data0>client to client passed
+        * 4. Read the calibration data from hardware; store it in the bmp280_data
+        * 5. Additional config
+            * Set to Normal Mode and oversampling
 */
-struct bmp280_data {
-    struct i2c_client* client; //https://www.linuxtv.org/downloads/v4l-dvb-internals/device-drivers/API-struct-i2c-client.html
-    // Calibration data
-    struct {
-        u16 dig_T1;  // unsigned
-        s16 dig_T2;  // signed
-        s16 dig_T3;  // signed 
-    } calib;
-};
-
-/*
-    * Implement the probe function
-    * the probe() function is called when the kernel finds a BMP280 sensor on the I2C bus. 
-    * Passes the I2C client ==> specific BMP280 sensor on the bus.
-*/
-static int bmp280_probe(struct i2c_client* client, const struct i2c_device_id* id) {
+static int bmp280_probe(struct i2c_client* client, const struct i2c_device_id* id) 
+{
+    struct bmp280_data *data;
     int ret;
     u8 chip_id;
-    struct bmp280_data* data;
 
     /* #1
         * Verify BMP280 by reading the chip ID at register 0xD0
         * BMP280 has a chip ID of 0x58, check if the chip ID is 0x58
     */
-    ret = i2c_smbus_read_byte_data(client, 0xD0);
-    if (ret < 0) {
+    ret = i2c_smbus_read_byte_data(client, BMP280_REG_CHIPID);
+    if (ret < 0) 
+    {
         printk(KERN_ALERT "Failed to read chip ID\n");
+        printk(KERN_INFO " __probe(), i2c_smbus_read => chipID");
         return ret;
     }
-    chip_id = ret;
 
-    if (chip_id != 0x58) {
+    chip_id = ret;
+    if (chip_id != 0x58) 
+    {
         printk(KERN_ALERT "Invalid chip ID: 0x%x\n", chip_id);
+        printk(KERN_INFO " __probe(), chipID0x8!=ret");
         return -ENODEV;
     }
     printk(KERN_INFO "Detected BMP280 with chip ID: 0x%x\n", chip_id);
+    printk(KERN_INFO " __probe(), step one complete");
 
     /* #2  
         * https://www.linuxtv.org/downloads/v4l-dvb-internals/device-drivers/API-struct-i2c-client.html
-        * Allocate memory for the device-specific structure
-        * Associate the data->client with the client
+        * Allocate memory for the device-specific data
+        * dev_kzalloc https://www.unix.com/man-page/suse/9/devm_kzalloc (is freeed automatically)
+        * Now we have our hardware data living in our computer memory
     */
-    data = devm_kzalloc(&client->dev, sizeof(struct bmp280_data), GFP_KERNEL); //Driver model device node for the slave.
+    data = devm_kzalloc(&client->dev, sizeof(struct bmp280_data), GFP_KERNEL);   
     if (!data) {
         printk(KERN_ALERT "Failed to allocate memory for device data\n");
+        printk(KERN_INFO " __probe(), dev_kzalloc => MemoryError");
         return -ENOMEM;
     }
-    data->client = client;
-    i2c_set_clientdata(client, data);
+    printk(KERN_INFO " __probe(), step two complete");
 
     /* #3
+        * Assign Proper data
+    */
+    data->client = client;
+    i2c_set_clientdata(client, data);
+    printk(KERN_INFO " __probe(), step three complete");
+
+    /* #4
         * Retrieve Calibration data from the BMP280
         * Registers to read: 0x88 to 0xA1
         * Store the values in our data (Check for errors)
     */
-    data->calib.dig_T1 = i2c_smbus_read_word_data(client, 0x88);  // Read 16 bits from registers 0x88 and 0x89
-    data->calib.dig_T2 = i2c_smbus_read_word_data(client, 0x8A);  // Read 16 bits from registers 0x8A and 0x8B
-    data->calib.dig_T3 = i2c_smbus_read_word_data(client, 0x8C);  // Read 16 bits from registers 0x8C and 0x8D
-
-    // Check for errors while reading calibration data (BMP280 has only unsigned or signed calibration values)
-    if (data->calib.dig_T1 == 0 || data->calib.dig_T2 == 0 || data->calib.dig_T3 == 0) {
-        printk(KERN_ALERT "Failed to read calibration data\n");
-        return -EIO;
+    ret = i2c_smbus_read_word_data(client, 0x88);
+    if (ret < 0) {
+        printk(KERN_ERR "Failed to read calibration data (dig_T1)\n");
+        return ret;
     }
-    printk(KERN_INFO "BMP280: Calibration data retrieved\n");
+    data->calib.dig_T1 = ret;
 
-    /* #4
-        * Configuring the sensor 
+    ret = i2c_smbus_read_word_data(client, 0x8A);
+    if (ret < 0) {
+        printk(KERN_ERR "Failed to read calibration data (dig_T2)\n");
+        return ret;
+    }
+    data->calib.dig_T2 = ret;
+
+    ret = i2c_smbus_read_word_data(client, 0x8C);
+    if (ret < 0) {
+        printk(KERN_ERR "Failed to read calibration data (dig_T3)\n");
+        return ret;
+    }
+    data->calib.dig_T3 = ret;
+
+    printk(KERN_INFO "BMP280: Calibration data retrieved successfully\n");
+
+    /* #5
+        * Configuring additional settings
         * Registers to write to: 0xF4 (Normal Mode, 1x oversampling for temperature)
         * Value to write: 0x27
     */
     ret = i2c_smbus_write_byte_data(client, 0xF4, 0x27);
     if (ret < 0) {
         printk(KERN_ALERT "Failed to configure sensor\n");
+        printk(KERN_INFO " __probe(), i2c_smbus_write => NrmlXOvrSmpl(XXX)");
         return ret;
     }
     printk(KERN_INFO "BMP280: Sensor configured successfully\n");
-
+    printk(KERN_INFO " __probe(), step four complete");
     return 0;
 };
 
@@ -178,11 +193,11 @@ static int bmp280_release(struct inode* inode, struct file* file) {
     * This function is called when _USR wants to read Temp from the  driver's device file
     * Copies temp data from kernel to user and returns the no of bytes read
     * Simplified Flow
-    * 1. Read raw temperature (20 bit) data
-    * 2. Apply the calibration (Static) value and compensate the temperature 
-        * Calculation from the datasheet 
-    * 3. Change the final final value to string, 
-    * 4. copy value from KernelSpaceBuffer to UserSpaceBuffer
+        * 1. Read raw temperature (20 bit) data
+        * 2. Apply the calibration (Static) value and compensate the temperature 
+            * Calculation from the datasheet 
+        * 3. Change the final final value to string, 
+        * 4. copy value from KernelSpaceBuffer to UserSpaceBuffer
 */
 static ssize_t bmp280_read(struct file* file, const char __user* buf, 
                                         size_t count, loff_t* offset) 
@@ -207,7 +222,7 @@ static ssize_t bmp280_read(struct file* file, const char __user* buf,
     if (raw_temp < 0)
     {
         printk(KERN_ALERT "Failed to read temperature data from BMP280");
-        printk(KERN_ALERT " __read(), raw_temp => i2c_smbus_read");
+        printk(KERN_ALERT " __read(), i2c_smbus_read => raw_temp");
         return -EIO;
     }
 
