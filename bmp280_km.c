@@ -197,7 +197,7 @@ static ssize_t bmp280_read(struct file* file, const char __user* buf, size_t cou
         * 20 bits of data
     */
 
-    struct bmp280_data* data = file->private_data;
+    struct bmp280_data* data = file->private_data;  // Assigning device specific data to file*
     struct i2c_client* client = data->client;
 
     s32 raw_temp;
@@ -209,7 +209,10 @@ static ssize_t bmp280_read(struct file* file, const char __user* buf, size_t cou
     char temp_str[10]; // temp string
     int len;
 
-    //READ TEMP DATA
+    /* 
+        READ TEMP DATA
+        Temp Value is 20 bit value composed of 8 bits from three registers
+    */
     temp_msb = i2c_smbus_read_byte_data(client, 0xFA);
     temp_lsb = i2c_smbus_read_byte_data(client, 0xFB);
     temp_xlsb = i2c_smbus_read_byte_data(client, 0xFC);
@@ -222,7 +225,7 @@ static ssize_t bmp280_read(struct file* file, const char __user* buf, size_t cou
     raw_temp = (temp_msb << 12) | (temp_lsb << 4) | (temp_xlsb >> 4);
 
     /* #2
-        * Apply calibration data to the raw temp data
+        * Apply calibration data to the raw temp data (compensation)
         * Formula: T = (raw_temp / 16384.0 - data->calib.dig_T1 / 1024.0) * data->calib.dig_T2
     */
     compensated_temp = bmp280_compensate_temp(data, raw_temp);
