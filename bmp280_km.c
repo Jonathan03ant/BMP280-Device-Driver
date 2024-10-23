@@ -267,12 +267,9 @@ static ssize_t bmp280_read(struct file* file, const char __user* buf,
     return strlen(temp_str) + 1;
 };
 
-/* 
-    * Defining the FOPS stucture for the driver
-*/
-
 
 /*
+    * fops are used when we initialize a cdev structure
     * This will be the file operations the Kernel calls
     * When the driver is called from the user space
     # FUNCTION PROTOTYPES
@@ -285,9 +282,16 @@ struct file_operations f_ops = {
     .write = bmp280_write,
 };
 
+
 /*
-    * Define the init and exit functions for the driver
-    * These functions are called when the driver is loaded and unloaded
+    * __init is called when the driver is loaded using sudo insmode .ko
+    * Simplified flow
+        * 1. Register the i2c driver first
+        * 2. Allocate Maj and Min no (dynamicaly)
+        * 3. cdev flow
+            * # create cdev   cdev_alloc()
+            * # Init allocated cdev with our fops
+            * # Associate cdev with dev_t (device no)
 */
 static int __init bmp280_init(void) {
     /*
@@ -296,6 +300,7 @@ static int __init bmp280_init(void) {
     int ret = i2c_add_driver(&bmp280_driver);
     if (ret) {
         printk(KERN_ALERT "Failed to register I2C driver\n");
+        printk(KERN_INFO " __init(), i2c_add_driver(XXXX)");
         return ret;
     }
     printk(KERN_INFO "BMP280 driver registered successfully\n");
@@ -306,20 +311,22 @@ static int __init bmp280_init(void) {
     ret = alloc_chrdev_region(&dev_num, 0, 1, DEVICE_NAME);
     if (ret) {
         printk(KERN_ALERT "Failed to allocate a Major number");
-        i2c_del_driver(&bmp280_driver);
+        printk(KERN_INFO " __init(), alloc_chrdev_region(XXXX)");
+        i2c_del_driver(&bmp280_driver); //undo
         return ret;
     }
 
-    major = MAJOR(dev_num);
+    //major = MAJOR(dev_num);
     printk(KERN_INFO "Allocated major number: %d\n", major);
 
     /*
-        * Create and add the character device
+        * Initializw the character device and add it to the syttesm
         * Associate file operations (f_ops)
         * Add the device to the system
     */
     bmp280_cdev = cdev_alloc();
     if (!bmp280_cdev) {
+        printk(KERN_INFO " __init(), cdev_alloc(XXXX)");
         unregister_chrdev_region(dev_num, 1);
         i2c_del_driver(&bmp280_driver);  
         return -ENOMEM;
@@ -327,9 +334,11 @@ static int __init bmp280_init(void) {
 
     cdev_init(bmp280_cdev, &f_ops);  
     bmp280_cdev->owner = THIS_MODULE;
+
     ret = cdev_add(bmp280_cdev, dev_num, 1);  
     if (ret) {
         printk(KERN_ALERT "Failed to add cdev to the kernel\n");
+        printk(KERN_INFO " __init(), cdev_add(XXXX)");
         cdev_del(bmp280_cdev);
         unregister_chrdev_region(dev_num, 1);
         i2c_del_driver(&bmp280_driver);  
@@ -337,25 +346,51 @@ static int __init bmp280_init(void) {
     }
 
     printk(KERN_INFO "Character device created successfully\n");
+
+    // 4. Create a device class
+    bmp280_class = class_create(THIS_MODULE, DEVICE_NAME);
+    if (IS_ERR(bmp280_class)) {
+        cdev_del(bmp280_cdev);
+        unregister_chrdev_region(dev_num, 1);
+        i2c_del_driver(&bmp280_driver);
+        return PTR_ERR(bmp280_class);
+    }
+
+    // 5. Create a device node in /dev
+    device_create(bmp280_class, NULL, dev_num, NULL, DEVICE_NAME);
+    printk(KERN_INFO "BMP280: Device node created in /dev\n");
+
+    return 0;  // Success
     return 0;  // Success
 };    
 
 
 /*
+    * __init is called when the driver is loaded using sudo rmode .ko
     * Remove the Chr Device
     * Unregister the driver
 */
 static void __exit bmp280_exit(void) {
-    cdev_del(bmp280_cdev);
-    unregister_chrdev_region(dev_num, 1);
-    printk(KERN_INFO "Character device unregistered\n");
+    // 1. Remove the device node
+    device_destroy(bmp280_class, dev_num);
+    
+    // 2. Destroy the device class
+    class_destroy(bmp280_class);
 
+    // 3. Delete the character device
+    cdev_del(bmp280_cdev);
+
+    // 4. Unregister the character device number
+    unregister_chrdev_region(dev_num, 1);
+    
+    // 5. Unregister the I2C driver
     i2c_del_driver(&bmp280_driver);
-    printk(KERN_INFO "BMP280 driver unregistered\n");
-};
+    
+    printk(KERN_INFO "BMP280: Driver unloaded\n");
+}
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Jonathan");
+MODULE_AUTHOR("Jonathan Antenanie");
 MODULE_DESCRIPTION("Driver for BMP280 I2C Temp/Hum Sensor Module");
 
 module_init(bmp280_init);
