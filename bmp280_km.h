@@ -1,6 +1,5 @@
 #ifndef BMP280_KM_H
 #define BMP280_KM_H
-#include <stdint.h>
 #include <linux/i2c-dev.h>
 #include <linux/mutex.h>
 #include <linux/cdev.h>
@@ -34,10 +33,10 @@ struct bmp280_data {
     struct mutex lock;
     // The following structure contains calibration data of the sensor
     struct {
-        uint8_t chip_id;
-        uint16_t dig_T1;
-        int16_t dig_T2;
-        int16_t dig_T3;
+        u8 chip_id;     //unsigned 8 bit
+        u16 dig_T1;     //unsigned 16 bit
+        s16 dig_T2;     //signed 16 bit
+        s16 dig_T3;     //signed 16 bit
     } calib;
 };
 

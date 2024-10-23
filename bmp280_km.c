@@ -6,6 +6,7 @@
 #include <linux/i2c.h>   // I2C Communication
 #include <linux/init.h>  // Module init
 #include <linux/slab.h>  // FOr memory Allocation (Kmalloc, Kfree)
+#include <linux/device.h>
 
 #include "bmp280_km.h"
 
@@ -28,7 +29,8 @@ static struct class *bmp280_class;
         and if you find me, Please call My Probe function
         Heres my Contact Info"
 */
-static const struct i2c_device_id bmp280_id[] = {
+static const struct i2c_device_id bmp280_id[] = 
+{
     {"bmp280", 0},
     {} // newer version of the driver
 };
@@ -51,7 +53,7 @@ MODULE_DEVICE_TABLE(i2c, bmp280_id);
         * 5. Additional config
             * Set to Normal Mode and oversampling
 */
-static int bmp280_probe(struct i2c_client* client, const struct i2c_device_id* id) 
+static int bmp280_probe(struct i2c_client* client) 
 {
     struct bmp280_data *data;
     int ret;
@@ -150,12 +152,12 @@ static int bmp280_probe(struct i2c_client* client, const struct i2c_device_id* i
     * This function is called by the kernel when the device is removed from the system
     * Or unloaded
 */
-static int bmp280_remove(struct i2c_client* client)
+static void bmp280_remove(struct i2c_client *client)
 {
     //(devm_kzalloc) is automatically freed,
     printk(KERN_INFO "Removing BMP280 device\n");
-    return 0;
-}
+    return;
+};
 
 
 /*
@@ -163,7 +165,7 @@ static int bmp280_remove(struct i2c_client* client)
     * This functions are used once the driver id is found by the Master
     * https://www.linuxtv.org/downloads/v4l-dvb-internals/device-drivers/API-struct-i2c-driver.html
 */
-static struct i2c_driver bmp280_driver 
+static struct i2c_driver bmp280_driver =
 {
     .driver = {
             .name = "bmp280",
@@ -211,7 +213,7 @@ static int bmp280_release(struct inode* inode, struct file* file)
         * 3. Change the final final value to string, 
         * 4. copy value from KernelSpaceBuffer to UserSpaceBuffer
 */
-static ssize_t bmp280_read(struct file* file, const char __user* buf, 
+static ssize_t bmp280_read(struct file* file, char __user* buf, 
                                         size_t count, loff_t* offset) 
 {
     struct bmp280_data* data = file->private_data;  // file->private_data already contains data, because it is opned()
@@ -219,7 +221,8 @@ static ssize_t bmp280_read(struct file* file, const char __user* buf,
     int ret;
     int32_t raw_temp;                               // Possible Type Error  Raw temperature from registers (20 bit value)
     int32_t actual_temp;                            // Possible Type Error s32Maybe  Actual temperature (in °C)
-    int32_t var1, var2                              // Possible Type Error s32Maybe
+    int32_t var1; 
+    int32_t var2;                                   // Possible Type Error s32Maybe
     char temp_str[16];                              // Buffer to store the temp
     
     /* #1
@@ -227,7 +230,7 @@ static ssize_t bmp280_read(struct file* file, const char __user* buf,
         * Registers to read: 0xFA to 0xFC
         * 20 bits of data
     */
-    raw_temp = (i2c_smbus_read_byte_data(clinet, BMP280_TEMP_MSB) << 12) |
+    raw_temp = (i2c_smbus_read_byte_data(client, BMP280_TEMP_MSB) << 12) |
               (i2c_smbus_read_byte_data(data->client, BMP280_TEMP_LSB) << 4)  |
               (i2c_smbus_read_byte_data(data->client, BMP280_TEMP_XLSB) >> 4);
 
@@ -244,7 +247,7 @@ static ssize_t bmp280_read(struct file* file, const char __user* buf,
     */
     int32_t dig_T1 = data->calib.dig_T1;
     int32_t dig_T2 = data->calib.dig_T2;
-    int32_t dig_T2 = data->calib.dig_T3;
+    int32_t dig_T3 = data->calib.dig_T3;
 
     var1 = (((raw_temp / 8) - (dig_T1 * 2)) * dig_T2) / 2048;
     var2 = (((((raw_temp / 16) - dig_T1) * (raw_temp / 16 - dig_T1)) / 4096) * dig_T3) / 16384;
@@ -255,12 +258,12 @@ static ssize_t bmp280_read(struct file* file, const char __user* buf,
         * Convert the temperature to a string
         * Copy the string to the user space
     */
-    snprintf(temp_str, sizeof(temp_str), "%d.%02d\n", temperature / 100, temperature % 100);
+    snprintf(temp_str, sizeof(temp_str), "%d.%02d\n", actual_temp / 100, actual_temp % 100);
     ret = copy_to_user(buf, temp_str, strlen(temp_str) + 1);
     if (ret)
     {
-        printk(KERNEL_ALERT "Failed to copy KernelBuffer(temp_str) to UserSpaceBuffer(buf)");
-        printk(KERNEL_ALERT "__read(), copy_to_usr => Kernel to User");
+        printk(KERN_ALERT "Failed to copy KernelBuffer(temp_str) to UserSpaceBuffer(buf)");
+        printk(KERN_ALERT "__read(), copy_to_usr => Kernel to User");
         return -EFAULT;
     }
 
@@ -274,12 +277,13 @@ static ssize_t bmp280_read(struct file* file, const char __user* buf,
     * When the driver is called from the user space
     # FUNCTION PROTOTYPES
 */
-struct file_operations f_ops = {
-    .owner = THIS_MODULE
+struct file_operations f_ops = 
+{
+    .owner = THIS_MODULE,
     .open = bmp280_open,
     .release = bmp280_release,
     .read = bmp280_read,
-    .write = bmp280_write,
+    //.write = bmp280_write,
 };
 
 
@@ -293,10 +297,12 @@ struct file_operations f_ops = {
             * # Init allocated cdev with our fops
             * # Associate cdev with dev_t (device no)
 */
-static int __init bmp280_init(void) {
+static int __init bmp280_init(void) 
+{
     /*
         * Register the I2C driver with the Kernel
     */
+    int major;
     int ret = i2c_add_driver(&bmp280_driver);
     if (ret) {
         printk(KERN_ALERT "Failed to register I2C driver\n");
@@ -348,7 +354,7 @@ static int __init bmp280_init(void) {
     printk(KERN_INFO "Character device created successfully\n");
 
     // 4. Create a device class
-    bmp280_class = class_create(THIS_MODULE, DEVICE_NAME);
+    bmp280_class = class_create(DEVICE_NAME);
     if (IS_ERR(bmp280_class)) {
         cdev_del(bmp280_cdev);
         unregister_chrdev_region(dev_num, 1);
@@ -360,7 +366,6 @@ static int __init bmp280_init(void) {
     device_create(bmp280_class, NULL, dev_num, NULL, DEVICE_NAME);
     printk(KERN_INFO "BMP280: Device node created in /dev\n");
 
-    return 0;  // Success
     return 0;  // Success
 };    
 
