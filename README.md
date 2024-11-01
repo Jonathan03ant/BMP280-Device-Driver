@@ -18,8 +18,8 @@
 The BMP280 I2C Temperature Driver is a Linux kernel module that allows interfacing with the BMP280 temperature sensor via I2C. This README provides all necessary information for setting up, connecting, and reading data from the BMP280 sensor using this driver.
 
 ## Prerequisites
-- Raspberry Pi (or any other platform supporting I2C communication).
-- BMP280 temperature sensor.
+- Raspberry Pi (or any other platform running Linux/Embedded linux, supporting I2C communication).
+- BMP280 temperature sensor; can purchased from [Amazon](https://www.amazon.ca/dp/B0CD4PQZGQ?ref=nb_sb_ss_w_as-reorder_k8_1_3&amp=&crid=2O5HL4SJU7RKQ&amp=&sprefix=bmp).
 - GCC and necessary kernel headers.
 - An I2C enabled kernel.
 
