@@ -38,7 +38,7 @@ The first step is always to clone this repository and save it inside your Raspbe
 ```bash
 cd /path/to/file
 git clone git@github.com:Jonathan03ant/BMP280-Device-Driver.git
-cd BMP280-Device_Driver
+cd BMP280-Device-Driver
 ```
 
 ### Compilation
@@ -215,7 +215,6 @@ This README covered everything from sensor connection to reading data and unload
 
 ## Contact
 
-For questions, feel free to create an issue on GitHub or contact the maintainer.
+For questions, feel free to create an issue on GitHub.
 
-Happy Hacking!
-
+Stay Lowlevel!!! 
