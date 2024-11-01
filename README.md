@@ -1,8 +1,10 @@
 # BMP280 Device Driver Documentation
 
 ## Prerequisites
-
-- **BMP280 Sensor**: You can purchase it from [Amazon](https://www.amazon.com).
+- **Raspberry Pi** (or any other platform running Linux/Embedded linux, supporting I2C communication).
+- **BMP280 temperature sensor**: can purchased from [Amazon](https://www.amazon.ca/dp/B0CD4PQZGQ?ref=nb_sb_ss_w_as-reorder_k8_1_3&amp=&crid=2O5HL4SJU7RKQ&amp=&sprefix=bmp).
+- **GCC and necessary kernel headers**.
+- **An I2C enabled linux kernel**.
 
 ## Connecting the BMP280 Sensor
 
@@ -29,6 +31,16 @@ The output should show an address, like `0x76`, indicating that the BMP280 senso
 
 This section provides instructions to compile and load the BMP280 kernel module.
 
+### Cloning the repository
+
+The first step is always to clone this repository and save it inside your Raspberry Pi (or other platform) prefered directory.
+
+```bash
+cd /path/to/file
+git clone git@github.com:Jonathan03ant/BMP280-Device-Driver.git
+cd BMP280-Device_Driver
+```
+
 ### Compilation
 
 Ensure that you have the kernel headers installed, then use `make` to compile:
@@ -38,6 +50,8 @@ make
 ```
 
 If compilation is successful, you should see a `.ko` (kernel object) file generated.
+.ko represents the driver code which is compiled and ready to be loaded.
+We will use this Machine Code to load the module dynamically.
 
 ### Loading the Driver
 
