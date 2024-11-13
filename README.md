@@ -27,6 +27,15 @@ sudo i2cdetect -y 1
 
 The output should show an address, like `0x76`, indicating that the BMP280 sensor is detected. If no address is detected, recheck your connections.
 
+### SYSFS
+
+After confirming the BMP280 address, we need to manually tell the Kernel about it. 
+
+```bash
+echo bmp280 0x76 > /sys/bus/i2c/devices/i2c-1/new_device
+```
+
+This tells the Kernel to create a new device with the name bmp280 by passing the specific address and associates it with the I2C bus i2c-1
 ## Driver Compilation and Loading
 
 This section provides instructions to compile and load the BMP280 kernel module.
